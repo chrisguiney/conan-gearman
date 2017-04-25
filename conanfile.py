@@ -14,17 +14,23 @@ class GearmanConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {
             "shared": [True, False],
-            "server": [True, False]
+            "server": [True, False],
+            "with_mysql": [True,False]
         }
 
     requires = "Boost/1.60.0@lasote@stable","libevent/2.0.22@theirix/stable"
-    default_options = "shared=False","server=False"
+    default_options = "shared=False","server=False","with_mysql=False"
     generators = "gcc"
     libcxx = "stdc++"
 
     def configure(self):
         self.options["Boost"].shared = True
         self.options["Boost"].header_only = False
+        self.options["libevent"].shared = self.options.shared
+
+        if self.options.with_mysql:
+            self.requires.add("MySQLClient/6.1.6@hklabbers/stable", private=False)
+            self.options["MySQLClient"].shared = self.options.shared
 
     def source(self):
         tools.download("https://github.com/gearman/gearmand/releases/download/%(1)s/gearmand-%(1)s.tar.gz" % {'1': self.version},
@@ -33,15 +39,27 @@ class GearmanConan(ConanFile):
         tools.unzip("gearman.tar.gz")
         os.unlink("gearman.tar.gz")
 
+    def unquote(self, str):
+        if str.startswith('"'):
+            str = str[1:]
+        if str.endswith('"'):
+            str = str[:-1]
+
+        return str
+
     def build(self):
         # extract the boost lib dir
         boost_libdir=""
+        mysql_libdir=""
         finished_package = os.getcwd() + "/pkg"
 
         flags = load("conanbuildinfo.gcc").split()
         for fl in flags:
-            if fl[0:2] == '-L' and re.match('.*[^A-Za-z0-9_\\-]Boost[^A-Za-z0-9_\\-]', fl):
-                boost_libdir = fl[2:]
+            if fl[0:2] == '-L':
+                if re.match('.*[^A-Za-z0-9_\\-]Boost[^A-Za-z0-9_\\-]', fl):
+                    boost_libdir = self.unquote(fl[2:])
+                elif re.match('.*[^A-Za-z0-9_\\-]MySQLClient[^A-Za-z0-9_\\-]', fl):
+                    mysql_libdir = self.unquote(fl[2:])
 
         make_options = os.getenv("MAKEOPTS") or ""
         if not re.match("/[^A-z-a-z_-]-j", make_options):
@@ -49,19 +67,41 @@ class GearmanConan(ConanFile):
             make_options += " -j %s" % (cpucount * 2)
 
         shared_flags = '--enable-static --disable-shared' if not self.options.shared else '--disable-static'
-        cflags = "-I%s/../include" % boost_libdir
+        cflags = '-I"%s/../include" ' % boost_libdir
+
+        if self.options.with_mysql:
+            cflags += '-I"%s/../include" ' % mysql_libdir
+        
+        if self.options.with_mysql:
+            os.environ["LDFLAGS"] = '-L"%s" -L"%s"' % (boost_libdir, mysql_libdir)
+        else:
+            os.environ["LDFLAGS"] = '-L"%s"' % boost_libdir
+
         os.environ["CFLAGS"] = cflags
         os.environ["CXXFLAGS"] = cflags
-        os.environ["LDFLAGS"] = "-L%s" % boost_libdir
 
         if self.options.server:
             os.environ["LDFLAGS"] += " -Wl,-E"
 
-        if not self.options.shared:
-            os.environ["LIBS"] = "-l%s" % self.libcxx
+        # sigh... gearman
+        libs = ""
+        if self.options.with_mysql:
+            libs = "-lmysqlclient"
 
-        self.run("cd gearmand-%s && ./configure --without-mysql --prefix=\"%s\" --with-boost=\"%s/..\" %s" % \
-                (self.version, finished_package, boost_libdir, shared_flags))
+        if not self.options.shared:
+            os.environ["LIBS"] = "-ldl -l%s %s" % (self.libcxx, libs)
+        else:
+            os.environ["LIBS"] = libs
+
+        mysql_flags = "--without-mysql"
+        if self.options.with_mysql:
+            mysql_flags = "--with-mysql=\"%s/..\"" % mysql_libdir
+
+        command = 'configure %s --prefix="%s" --with-boost="%s/.." %s' % \
+                (mysql_flags, finished_package, boost_libdir, shared_flags)
+
+        self.output.info("Running %s" % command)
+        self.run("cd gearmand-%s && ./%s" % (self.version, command))
         self.run("cd gearmand-%s && make %s && make %s install" % (self.version, make_options, make_options))
 
         if self.options.server:

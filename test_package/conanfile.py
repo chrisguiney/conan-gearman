@@ -14,6 +14,7 @@ class GearmanTestConan(ConanFile):
     def configure(self):
         self.options['Gearman'].shared = True
         self.options['Gearman'].server = True
+        self.options['Gearman'].with_mysql = False
         self.options['libevent'].with_openssl = False
 
     def build(self):
