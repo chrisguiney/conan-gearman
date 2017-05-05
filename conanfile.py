@@ -115,9 +115,13 @@ class GearmanConan(ConanFile):
                 # just copy the archive
                 self.run('cp "%s" "%s/lib"' % (archive, finished_package))
 
-            # copy the relevant include files
+            # copy the relevant include files from server
             cp = FileCopier("%s/gearmand-%s" % (os.getcwd(), self.version), finished_package)
             cp("*.h*", dst="include/libgearman-server", src="libgearman-server")
+
+            # we also need the whole suite of files from libgearman
+            cp("*.h", dst="include/libgearman", src="libgearman")
+            cp("*.h", dst="include", src=".")
 
     def package(self):
         self.copy("*", dst="lib", src="pkg/lib", links=True)
