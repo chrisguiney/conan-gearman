@@ -25,7 +25,9 @@ class GearmanConan(ConanFile):
 
     def configure(self):
         self.options["Boost"].shared = True
+        self.options["bzip2"].shared = True # Because the Boost package doesn't do this as it needs to
         self.options["Boost"].header_only = False
+        self.options["Boost"].without_test = True
         self.options["libevent"].shared = self.options.shared
 
         if self.options.with_mysql:
