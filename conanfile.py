@@ -25,6 +25,7 @@ class GearmanConan(ConanFile):
 
     def configure(self):
         self.options["Boost"].shared = True
+        self.options["libevent"].shared = True
         self.options["bzip2"].shared = True # Because the Boost package doesn't do this as it needs to
         self.options["Boost"].header_only = False
         self.options["Boost"].without_test = True
@@ -53,6 +54,7 @@ class GearmanConan(ConanFile):
         # extract the boost lib dir
         boost_libdir=""
         mysql_libdir=""
+        libevent_libdir=""
         finished_package = os.getcwd() + "/pkg"
 
         flags = load("conanbuildinfo.gcc").split()
@@ -62,6 +64,8 @@ class GearmanConan(ConanFile):
                     boost_libdir = self.unquote(fl[2:])
                 elif re.match('.*[^A-Za-z0-9_\\-]MySQLClient[^A-Za-z0-9_\\-]', fl):
                     mysql_libdir = self.unquote(fl[2:])
+                elif re.match('.*[^A-Za-z0-9_\\-]libevent[^A-Za-z0-9_\\-]', fl):
+                    libevent_libdir = self.unquote(fl[2:])
 
         make_options = os.getenv("MAKEOPTS") or ""
         if not re.match("/[^A-z-a-z_-]-j", make_options):
@@ -69,21 +73,32 @@ class GearmanConan(ConanFile):
             make_options += " -j %s" % (cpucount * 2)
 
         shared_flags = '--enable-static --disable-shared' if not self.options.shared else '--disable-static'
-        cflags = '-I"%s/../include" ' % boost_libdir
+        cflags = '-I"%s/../include" -I"%s/../include"' % (boost_libdir, libevent_libdir)
+
+        os.environ["C_INCLUDE_PATH"] = "%s/../include" % libevent_libdir
+        os.environ["CPLUS_INCLUDE_PATH"] = "%s/../include" % libevent_libdir
 
         if self.options.with_mysql:
             cflags += '-I"%s/../include" ' % mysql_libdir
         
+        # apparently the autotools m4 config that gearman set up for
+        # libevent checking can't handle quoted libraries
+        boost_libdir = boost_libdir.replace(' ', '\\ ')
+        libevent_libdir = libevent_libdir.replace(' ', '\\ ')
+        mysql_libdir = mysql_libdir.replace(' ', '\\ ')
+
         if self.options.with_mysql:
-            os.environ["LDFLAGS"] = '-L"%s" -L"%s"' % (boost_libdir, mysql_libdir)
+            os.environ["LIBS"] = '-L%s -L%s -L%s' % (boost_libdir, libevent_libdir, mysql_libdir)
         else:
-            os.environ["LDFLAGS"] = '-L"%s"' % boost_libdir
+            os.environ["LIBS"] = '-L%s -L%s' % (boost_libdir, libevent_libdir)
+
+        if self.options.server:
+            cflags += " -Wl,-E"
 
         os.environ["CFLAGS"] = cflags
         os.environ["CXXFLAGS"] = cflags
+        os.environ["LD_LIBRARY_PATH"] = libevent_libdir
 
-        if self.options.server:
-            os.environ["LDFLAGS"] += " -Wl,-E"
 
         # sigh... gearman
         libs = ""
@@ -91,9 +106,9 @@ class GearmanConan(ConanFile):
             libs = "-lmysqlclient"
 
         if not self.options.shared:
-            os.environ["LIBS"] = "-ldl -l%s %s" % (self.libcxx, libs)
+            os.environ["LIBS"] += "-ldl -l%s %s" % (self.libcxx, libs)
         else:
-            os.environ["LIBS"] = libs
+            os.environ["LIBS"] += libs
 
         mysql_flags = "--without-mysql"
         if self.options.with_mysql:
@@ -104,15 +119,15 @@ class GearmanConan(ConanFile):
 
         self.output.info("Running %s" % command)
         self.run("cd gearmand-%s && ./%s" % (self.version, command))
-        self.run("cd gearmand-%s && make %s && make %s install" % (self.version, make_options, make_options))
+        self.run("cd gearmand-%s && make %s && make install" % (self.version, make_options))
 
         if self.options.server:
             archive = "gearmand-%s/libgearman-server/.libs/libgearman-server.a" % self.version
             if self.options.shared:
                 # we need to build a shared version of the server
                 self.run('g++ -o "%s/lib/libgearman-server.so" -shared -rdynamic ' % finished_package +
-                        ' -Wl,--whole-archive "%s" -Wl,--no-whole-archive' % archive +
-                        ' %s %s' % (os.getenv("LDFLAGS") or "", os.getenv("LIBS") or ""))
+                        ' -Wl,--whole-archive %s "%s" -Wl,--no-whole-archive' % (os.getenv("LDFLAGS") or "", archive) +
+                        ' %s ' % (os.getenv("LIBS") or ""))
             else:
                 # just copy the archive
                 self.run('cp "%s" "%s/lib"' % (archive, finished_package))
