@@ -114,6 +114,9 @@ class GearmanConan(ConanFile):
         if self.options.with_mysql:
             mysql_flags = "--with-mysql=\"%s/..\"" % mysql_libdir
 
+        # TODO: make these flags if someone needs them and set up the deps
+        mysql_flags += " --without-sqlite3 --without-postgresql"
+
         command = 'configure %s --prefix="%s" --with-boost="%s/.." %s' % \
                 (mysql_flags, finished_package, boost_libdir, shared_flags)
 
