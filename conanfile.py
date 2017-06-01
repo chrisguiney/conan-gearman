@@ -3,6 +3,7 @@ from conans.errors import ConanException
 from conans.util.files import load
 from conans.client.file_copier import FileCopier
 import os
+import fnmatch
 import re
 
 class GearmanConan(ConanFile):
@@ -41,6 +42,15 @@ class GearmanConan(ConanFile):
 
         tools.unzip("gearman.tar.gz")
         os.unlink("gearman.tar.gz")
+
+        # Export all of the classes in libgearman-server
+        exportre = re.compile('^class ', re.MULTILINE)
+        for root, dirnames, filenames in os.walk('gearmand-%s/libgearman-server' % self.version):
+            for filename in fnmatch.filter(filenames, '*.h'):
+                fn = os.path.join(root, filename)
+                content = re.sub('^\s+class ', 'class GEARMAN_API ', load(fn), 0, flags=re.MULTILINE).encode('utf-8')
+                with open(fn, "wb") as handle:
+                    handle.write(content)
 
     def unquote(self, str):
         if str.startswith('"'):
@@ -98,7 +108,7 @@ class GearmanConan(ConanFile):
         os.environ["CFLAGS"] = cflags
         os.environ["CXXFLAGS"] = cflags
         os.environ["LD_LIBRARY_PATH"] = libevent_libdir
-
+        os.environ["LIBS"] += " -Wl,-E"
 
         # sigh... gearman
         libs = ""
@@ -129,7 +139,7 @@ class GearmanConan(ConanFile):
             if self.options.shared:
                 # we need to build a shared version of the server
                 self.run('g++ -o "%s/lib/libgearman-server.so" -shared -rdynamic ' % finished_package +
-                        ' -Wl,--whole-archive %s "%s" -Wl,--no-whole-archive' % (os.getenv("LDFLAGS") or "", archive) +
+                        ' -Wl,--whole-archive -fvisibility=default %s "%s" -Wl,--no-whole-archive' % (os.getenv("LDFLAGS") or "", archive) +
                         ' %s ' % (os.getenv("LIBS") or ""))
             else:
                 # just copy the archive
