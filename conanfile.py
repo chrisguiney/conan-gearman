@@ -19,7 +19,7 @@ class GearmanConan(ConanFile):
             "with_mysql": [True,False]
         }
 
-    requires = "Boost/1.60.0@lasote@stable","libevent/2.0.22@theirix/stable"
+    requires = "Boost/1.60.0@lasote/stable","libevent/2.0.22@theirix/stable","bzip2/1.0.6@kmaragon/stable"
     default_options = "shared=False","server=False","with_mysql=False"
     generators = "gcc"
     libcxx = "stdc++"
