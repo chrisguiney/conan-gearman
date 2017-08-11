@@ -18,6 +18,7 @@ class GearmanConan(ConanFile):
             "server": [True, False],
             "with_mysql": [True,False]
         }
+    exports = 'libhashkit-common.h.patch', 'libtest-cmdline.cc.patch'
 
     requires = "Boost/1.60.0@lasote/stable","libevent/2.0.22@theirix/stable","bzip2/1.0.6@kmaragon/stable"
     default_options = "shared=False","server=False","with_mysql=False"
@@ -51,6 +52,9 @@ class GearmanConan(ConanFile):
                 content = re.sub('^\s+class ', 'class GEARMAN_API ', load(fn), 0, flags=re.MULTILINE).encode('utf-8')
                 with open(fn, "wb") as handle:
                     handle.write(content)
+
+        # Apply our patches so we can compile on non-glibc
+        self.run('cd gearmand-%s && patch -p1 < ../libhashkit-common.h.patch && patch -p1 < ../libtest-cmdline.cc.patch' % self.version)
 
     def unquote(self, str):
         if str.startswith('"'):
