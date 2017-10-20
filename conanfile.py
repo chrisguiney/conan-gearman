@@ -101,10 +101,14 @@ class GearmanConan(ConanFile):
         libevent_libdir = libevent_libdir.replace(' ', '\\ ')
         mysql_libdir = mysql_libdir.replace(' ', '\\ ')
 
+        rpathdirs = ""
+
         if self.options.with_mysql:
             os.environ["LIBS"] = '-L%s -L%s -L%s' % (boost_libdir, libevent_libdir, mysql_libdir)
+            rpathdirs = "%s:%s:%s" % (boost_libdir, libevent_libdir, mysql_libdir)
         else:
             os.environ["LIBS"] = '-L%s -L%s' % (boost_libdir, libevent_libdir)
+            rpathdirs = "%s:%s" % (boost_libdir, libevent_libdir)
 
         if self.options.server:
             cflags += " -Wl,-E"
@@ -144,7 +148,7 @@ class GearmanConan(ConanFile):
                 # we need to build a shared version of the server
                 self.run('g++ -o "%s/lib/libgearman-server.so" -shared -rdynamic ' % finished_package +
                         ' -Wl,--whole-archive -fvisibility=default %s "%s" -Wl,--no-whole-archive' % (os.getenv("LDFLAGS") or "", archive) +
-                        ' %s ' % (os.getenv("LIBS") or ""))
+                        ' -Wl,-rpath -Wl,"%s" %s -levent -lboost_program_options' % (rpathdirs, os.environ["LIBS"]))
             else:
                 # just copy the archive
                 self.run('cp "%s" "%s/lib"' % (archive, finished_package))

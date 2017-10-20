@@ -6,5 +6,5 @@ conan_basic_setup(TARGETS)
 
 add_executable(example example.cpp)
 
-target_link_libraries(example CONAN_PKG::Gearman)
+target_link_libraries(example CONAN_PKG::Boost CONAN_PKG::Gearman)
 
