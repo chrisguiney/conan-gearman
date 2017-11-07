@@ -8,7 +8,7 @@ username = os.getenv("CONAN_USERNAME", "kmaragon")
 
 class GearmanTestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
-    requires = "Gearman/1.1.15@%s/%s" % (username, channel)
+    requires = "Gearman/1.1.17@%s/%s" % (username, channel)
     generators = "cmake"
 
     def configure(self):

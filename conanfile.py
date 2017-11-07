@@ -8,7 +8,7 @@ import re
 
 class GearmanConan(ConanFile):
     name = "Gearman"
-    version = "1.1.15"
+    version = "1.1.17"
     license = "BSD"
     url = "https://github.com/kmaragon/conan-gearman"
     description = "libgearman package for Conan"
